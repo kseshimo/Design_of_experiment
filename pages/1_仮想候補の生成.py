@@ -89,31 +89,34 @@ def D_optimization(x_generated, x_obtained=None, number_of_samples=10,number_of_
 
 
     # D 最適基準に基づくサンプル選択
-    np.random.seed(seed) # 乱数を生成するためのシードを固定
-    for random_search_number in range(number_of_random_searches):
+    for s in range(5):
 
-        # 1. ランダムに候補を選択
-        new_selected_indexes = np.random.choice(all_indexes, number_of_samples,replace=False)  #replace=Falseは重複なし
-        autoscaled_new_selected_samples = autoscaled_x_generated.loc[new_selected_indexes, :]
+        np.random.seed(seed) # 乱数を生成するためのシードを固定
+        for random_search_number in range(number_of_random_searches):
 
-        if x_obtained is not None:
-            autoscaled_new_selected_samples = pd.concat([autoscaled_new_selected_samples, autoscaled_x_generated.loc[x_obtained.index,:]])
+            # 1. ランダムに候補を選択
+            new_selected_indexes = np.random.choice(all_indexes, number_of_samples,replace=False)  #replace=Falseは重複なし
+            autoscaled_new_selected_samples = autoscaled_x_generated.loc[new_selected_indexes, :]
 
-        # if random_search_number < 10:
-        #     st.dataframe(autoscaled_new_selected_samples)
+            if x_obtained is not None:
+                autoscaled_new_selected_samples = pd.concat([autoscaled_new_selected_samples, autoscaled_x_generated.loc[x_obtained.index,:]])
 
-        ## 2. オートスケーリングした後に D 最適基準を計算
-        #autoscaled_new_selected_samples = (new_selected_samples - new_selected_samples.mean()) / new_selected_samples.std()
-        xt_x = np.dot(autoscaled_new_selected_samples.T, autoscaled_new_selected_samples)
-        d_optimal_value = np.linalg.det(xt_x)
-        # 3. D 最適基準が前回までの最大値を上回ったら、選択された候補を更新
-        if random_search_number == 0:
-            best_d_optimal_value = d_optimal_value.copy()
-            selected_sample_indexes = new_selected_indexes.copy()
-        else:
-            if best_d_optimal_value < d_optimal_value:
+            # if random_search_number < 10:
+            #     st.dataframe(autoscaled_new_selected_samples)
+
+            ## 2. オートスケーリングした後に D 最適基準を計算
+            #autoscaled_new_selected_samples = (new_selected_samples - new_selected_samples.mean()) / new_selected_samples.std()
+            xt_x = np.dot(autoscaled_new_selected_samples.T, autoscaled_new_selected_samples)
+            d_optimal_value = np.linalg.det(xt_x)
+            # 3. D 最適基準が前回までの最大値を上回ったら、選択された候補を更新
+            if random_search_number == 0:
                 best_d_optimal_value = d_optimal_value.copy()
                 selected_sample_indexes = new_selected_indexes.copy()
+            else:
+                if best_d_optimal_value < d_optimal_value:
+                    best_d_optimal_value = d_optimal_value.copy()
+                    selected_sample_indexes = new_selected_indexes.copy()
+        seed = seed + 1
     selected_sample_indexes = list(selected_sample_indexes) # リスト型に変換
 
     # 選択されたサンプル、選択されなかったサンプル
