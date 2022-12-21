@@ -109,7 +109,7 @@ def D_optimization(x_generated, x_obtained=None, number_of_samples=10,number_of_
             xt_x = np.dot(autoscaled_new_selected_samples.T, autoscaled_new_selected_samples)
             d_optimal_value = np.linalg.det(xt_x)
             # 3. D 最適基準が前回までの最大値を上回ったら、選択された候補を更新
-            if random_search_number == 0:
+            if s == 0 and random_search_number == 0:
                 best_d_optimal_value = d_optimal_value.copy()
                 selected_sample_indexes = new_selected_indexes.copy()
             else:
