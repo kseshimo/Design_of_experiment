@@ -13,8 +13,9 @@ from numpy import matlib
 import random
 import openpyxl
 import datetime
+from mpl_toolkits.mplot3d import Axes3D
 
-st.markdown("### 仮想候補の生成")
+st.markdown("### 仮想候補の生成(D最適計画)")
 
 def generating_samples_2(setting_of_generation,number_of_generating_samples=10000, sum_of_components=1):
 
@@ -48,39 +49,61 @@ def generating_samples_2(setting_of_generation,number_of_generating_samples=1000
         x_generated_no_group = x_generated.loc[x_generated_groups.index, :].drop(x_generated_groups.columns.tolist(),axis=1)
     else:
         x_generated_no_group = x_generated.copy()
-        
+
     #丸めこみ
     for j in x_generated_no_group.columns:
         #x_generated[:, variable_number] = np.round(x_generated[:, variable_number], int(setting_of_generation.iloc[3, variable_number]))
-        x_generated_no_group.loc[:, j] = float(setting_of_generation.loc['kizami', j]) * np.round(x_generated_no_group.loc[:, j] /  float(setting_of_generation.loc['kizami', j]))
+        kizami = float(setting_of_generation.loc['kizami', j])
+        min = x_generated_no_group.loc[:, j].min()
+        mod = np.round(min%kizami)
+        x_generated_no_group.loc[:, j] = kizami * np.round((x_generated_no_group.loc[:, j] - mod)/kizami) + mod
+        #x_generated_no_group.loc[:, j] = float(setting_of_generation.loc['kizami', j]) * np.round(x_generated_no_group.loc[:, j] /  float(setting_of_generation.loc['kizami', j]))
 
     x_generated_final = pd.concat([x_generated_groups, x_generated_no_group],axis=1).reindex(columns=x_generated.columns)
 
     return x_generated_final
 
 
-def D_optimization(x_generated, x_obtained=None, number_of_samples=10,number_of_random_searches = 1000):
+def D_optimization(x_generated, x_obtained=None, number_of_samples=10,number_of_random_searches = 10000):
     #一旦リセット
     selected_sample_indexes = None
-
     #number_of_random_searches = 1000 # ランダムにサンプルを選択して D 最適基準を計算する繰り返し回数
 
     # 実験条件の候補のインデックスの作成
-    all_indexes = list(x_generated.index)
+    all_indexes = x_generated.index.tolist()
+
+    #実験データ追加
+    if x_obtained is not None:
+        x_generated = pd.concat([x_generated,x_obtained.loc[:,x_generated.columns]])
+        x_generated = x_generated.drop_duplicates(keep='last')
+        #共通のindex
+        all_indexes = list(set(x_generated.index.tolist())&set(all_indexes))
+    else:
+        pass
+
+
+    #オートスケーリング
+    autoscaled_x_generated = (x_generated - x_generated.mean()) / x_generated.std()
+
+    #st.dataframe(autoscaled_x_generated)
+
 
     # D 最適基準に基づくサンプル選択
     np.random.seed(10) # 乱数を生成するためのシードを固定
     for random_search_number in range(number_of_random_searches):
+
         # 1. ランダムに候補を選択
-        new_selected_indexes = np.random.choice(all_indexes, number_of_samples)
-        new_selected_samples = x_generated.loc[new_selected_indexes, :]
+        new_selected_indexes = np.random.choice(all_indexes, number_of_samples,replace=False)  #replace=Falseは重複なし
+        autoscaled_new_selected_samples = autoscaled_x_generated.loc[new_selected_indexes, :]
 
         if x_obtained is not None:
-            new_selected_samples = pd.concat([x_obtained.loc[:,new_selected_samples.columns.tolist()],new_selected_samples])
+            autoscaled_new_selected_samples = pd.concat([autoscaled_new_selected_samples, autoscaled_x_generated.loc[x_obtained.index,:]])
 
+        # if random_search_number < 10:
+        #     st.dataframe(autoscaled_new_selected_samples)
 
-        # 2. オートスケーリングした後に D 最適基準を計算
-        autoscaled_new_selected_samples = (new_selected_samples - new_selected_samples.mean()) / new_selected_samples.std()
+        ## 2. オートスケーリングした後に D 最適基準を計算
+        #autoscaled_new_selected_samples = (new_selected_samples - new_selected_samples.mean()) / new_selected_samples.std()
         xt_x = np.dot(autoscaled_new_selected_samples.T, autoscaled_new_selected_samples)
         d_optimal_value = np.linalg.det(xt_x)
         # 3. D 最適基準が前回までの最大値を上回ったら、選択された候補を更新
@@ -104,17 +127,24 @@ def D_optimization(x_generated, x_obtained=None, number_of_samples=10,number_of_
 def generate_all_combination(df_setting_quantitative):
     df0 = pd.DataFrame()
     for column in df_setting_quantitative.columns:
-        df0[column] = np.arange(df_setting_quantitative.loc['最小値',column], df_setting_quantitative.loc['最大値',column],df_setting_quantitative.loc['間隔',column])
-
+        df0_column = pd.Series(np.arange(df_setting_quantitative.loc['min',column], df_setting_quantitative.loc['max',column]+df_setting_quantitative.loc['kizami',column],df_setting_quantitative.loc['kizami',column]))
+        df0_column.name = column
+        df0 = pd.concat([df0,df0_column],axis=1)
     df0.insert(0,'dummy',1)
+
+    #st.dataframe(df0)
 
     data = df0[['dummy',df_setting_quantitative.columns[0]]].dropna()
     for column in df_setting_quantitative.columns[1:]:
         data = data.merge(df0[['dummy',column]].dropna(), on='dummy', how='outer')
-    group_1 = df_setting_quantitative.T.query('グループ == 1').index.tolist()
+    group_1 = df_setting_quantitative.T.query('group == 1').index.tolist()
 
-    df1 = data[data[group_1].sum(axis=1).round(5)==1]    #適当に丸めないと1にならない
+    if len(group_1)!=0:
+        df1 = data[data[group_1].sum(axis=1).round(5)==1]    #適当に丸めないと1にならない
+    else:
+        df1 = data.copy()
 
+    #st.dataframe(df1)
     return df1
 
 
@@ -124,22 +154,46 @@ if w_setting:  #dataをアップロードしたらスタート
     df0 = pd.ExcelFile(w_setting)
     df_qualitative = df0.parse('質的変数', header=0,encoding='shift-jis')
     df_quantitative = df0.parse('量的変数', header=0,index_col=0,encoding='shift-jis')
+    df_seiyaku = df0.parse('制約条件',index_col=0,encoding='shift-jis')
     df0.close()
+    st.markdown('設定ファイル')
 
-    st.markdown('質的変数')
-    st.dataframe(df_qualitative)
-    st.markdown('量的変数')
-    st.dataframe(df_quantitative)
+else:
+    df0 = pd.ExcelFile('setting_example.xlsx')
+    df_qualitative = df0.parse('質的変数', header=0,encoding='shift-jis')
+    df_quantitative = df0.parse('量的変数', header=0,index_col=0,encoding='shift-jis')
+    df_seiyaku = df0.parse('制約条件',index_col=0,encoding='shift-jis')
+    df0.close()
+    st.markdown('設定ファイルの例（サイドバーに任意の設定ファイルをアップロード）')
 
-    How_to_make_samples = st.radio('仮想候補の作り方', ('ランダムに生成','全組み合わせ'))
-    
-    if df_quantitative.loc['group', :].sum() != 0:
-        sum_of_components = st.radio('比率などの合計量',(1,100))
+
+
+st.markdown('質的変数')
+st.dataframe(df_qualitative)
+st.markdown('量的変数')
+st.dataframe(df_quantitative)
+if df_seiyaku.empty:
+    pass
+else:
+    st.markdown('制約条件')
+    st.dataframe(df_seiyaku)
+
+
+st.markdown('------------------------------------------------------------------------------------------------')
+
+How_to_make_samples = st.radio('仮想候補の作り方', ('全組み合わせ','ランダムに生成'))
+
+if df_quantitative.loc['group', :].sum() != 0:
+    sum_of_components = st.radio('比率などの合計量',(1,100))
+else:
+    sum_of_components = 1
+
+
+if How_to_make_samples == '全組み合わせ':
+    if df_qualitative.empty:
+        data1 = generate_all_combination(df_quantitative)
+
     else:
-        sum_of_components = 1
-    
-
-    if How_to_make_samples == '全組み合わせ':
         #質的変数の組み合わせ
         df_qualitative_0 = pd.DataFrame(df_qualitative.iloc[:,0].dropna(how='all'))
         df_qualitative_0.insert(0,'dummy',1,allow_duplicates=True)
@@ -156,47 +210,51 @@ if w_setting:  #dataをアップロードしたらスタート
 
         #全組み合わせ
         data1 = df_qualitative_comb.merge(df_quantitative_comb, on='dummy', how='outer')
-        data2 = data1.drop(['dummy'], axis=1)
 
-        data2 = data2.rename(index=lambda s: 'c_' + str(s).zfill(len(str(data2.shape[0]))))  #indexの先頭にcandidateの番号をつける
 
-    elif How_to_make_samples == 'ランダムに生成':
-        number_of_samples = st.number_input('生成するおよその候補数',value=10000)
-        #量的変数
-        df_quantitative_comb = generating_samples_2(df_quantitative,number_of_generating_samples=number_of_samples,sum_of_components=sum_of_components)
-        df_quantitative_comb = pd.DataFrame(df_quantitative_comb,columns=df_quantitative.columns)
+    data2 = data1.drop(['dummy'], axis=1)
 
-        #質的変数はランダムchoice
-        for column in df_qualitative.columns:
-            for index in df_quantitative_comb.index:
-                df_quantitative_comb.loc[index,column]=random.choice(df_qualitative[column].dropna())
+    data2 = data2.rename(index=lambda s: 'c_' + str(s).zfill(len(str(data2.shape[0]))))  #indexの先頭にcandidateの番号をつける
 
-        #並び替え
-        data1 = df_quantitative_comb.reindex(columns=df_qualitative.columns.tolist()+df_quantitative.columns.tolist())
-        data2 = data1.copy()
+elif How_to_make_samples == 'ランダムに生成':
+    number_of_samples = st.number_input('生成するおよその候補数',value=10000)
+    #量的変数
+    df_quantitative_comb = generating_samples_2(df_quantitative,number_of_generating_samples=number_of_samples,sum_of_components=sum_of_components)
+    df_quantitative_comb = pd.DataFrame(df_quantitative_comb,columns=df_quantitative.columns)
 
-        data2 = data2.rename(index=lambda s: 'c_' + str(s).zfill(len(str(data2.shape[0]))))
+    #質的変数はランダムchoice
+    for column in df_qualitative.columns:
+        for index in df_quantitative_comb.index:
+            df_quantitative_comb.loc[index,column]=random.choice(df_qualitative[column].dropna())
 
-    st.markdown('候補の数:' + str(data2.shape[0]))
-    st.dataframe(data2)
+    #並び替え
+    data1 = df_quantitative_comb.reindex(columns=df_qualitative.columns.tolist()+df_quantitative.columns.tolist())
+    data2 = data1.copy()
 
-    get_dummy = st.checkbox('ダミー変数にするか',value=False)
-    if get_dummy:
-        dummy_var = st.multiselect('ダミー化する変数', df_qualitative.columns.tolist(), df_qualitative.columns.tolist())
-        data3 = pd.get_dummies(data2, columns=dummy_var)
-        #元の列を追加
-        data3 = pd.concat([data2.loc[:, df_qualitative.columns],data3],axis=1)
-    else:
-        data3 = data2.copy()
+    data2 = data2.rename(index=lambda s: 'c_' + str(s).zfill(len(str(data2.shape[0]))))
 
+st.markdown('候補の数:' + str(data2.shape[0]))
+st.dataframe(data2)
+
+get_dummy = st.checkbox('ダミー変数にするか',value=False)
+if get_dummy:
+    dummy_var = st.multiselect('ダミー化する変数', df_qualitative.columns.tolist(), df_qualitative.columns.tolist())
+    data3 = pd.get_dummies(data2, columns=dummy_var)
+    #元の列を追加
+    data3 = pd.concat([data2.loc[:, df_qualitative.columns],data3],axis=1)
     st.dataframe(data3)
+else:
+    data3 = data2.copy()
 
-    data4 = data3.copy()
-    
+data4 = data3.copy()
+
+including_ratio = st.checkbox('比率などあるか',value=False)
+
+if including_ratio:
     comb_name = st.text_input('比率や%などの単位名','ratio')
-    
+
     st.markdown(comb_name + 'が0の名前はnan、ダミーは0にし、重複を削除')
-    
+
 
     #ratioが0のダミーは0、ratioが0の名前はnan
     for j in [s for s in df_quantitative.columns.tolist() if comb_name in s]:
@@ -209,121 +267,163 @@ if w_setting:  #dataをアップロードしたらスタート
     #重複削除
     data4 = data4.drop_duplicates()
 
-    
+
     st.markdown('候補の数 :' + str(data4.shape[0]))
     st.dataframe(data4)
 
-    #候補の出力
-    csv_output = st.checkbox('生成された候補の出力',value=True)
-    if csv_output:
-        csv_name = st.text_input('ファイル名','candidates_'+str(datetime.date.today())+'.csv')
+data5 = data4.copy()
+
+if df_seiyaku.empty:
+    pass
+
+else:
+    seiyaku = st.checkbox('制約条件を適用', value=True)
+    if seiyaku:
+        df_seiyaku = df_seiyaku.replace({"\[":"data5["},regex=True)
+
+        for i in range(df_seiyaku.shape[0]):
+            seiyaku_i = df_seiyaku.iloc[i,0]
+            #st.markdown(seiyaku_i)
+            data5 = data5[eval(seiyaku_i)]
+
+        #st.dataframe(df_seiyaku)
+        st.markdown('候補の数:' + str(data5.shape[0]))
+        st.dataframe(data5)
+    else:
+        data5 = data4.copy()
+
+
+
+#候補の出力
+csv_output = st.checkbox('生成された候補の出力',value=True)
+if csv_output:
+    csv_name = st.text_input('ファイル名','candidates_'+str(datetime.date.today())+'.csv')
 #         if st.button('Download'):
 #             data4.to_csv(csv_name,encoding='shift-jis')
-        csv = data4.to_csv().encode('shift-jis')
-        st.download_button(label="Download",data=csv,file_name=csv_name)
+    csv = data5.to_csv().encode('shift-jis')
+    st.download_button(label="Download",data=csv,file_name=csv_name)
 
 
-    #D最適計画
-    data_for_d_opt = data4.drop(df_qualitative,axis=1)
-    do_d_opt = st.checkbox('D最適計画',value=False)
-    if do_d_opt:
-        number_of_selecting_samples = st.number_input('D最適基準で選択するサンプル数',1,50,10)
-        including_obtained_data = st.checkbox('実験済のデータを考慮するか',value=False)
-        number_of_random_searches = 1000
-        if including_obtained_data==False:
-            st.markdown('実験データなしor0からD最適')
-            D_selected_samples, d_value = D_optimization(data_for_d_opt, x_obtained=None, number_of_samples=number_of_selecting_samples,number_of_random_searches = number_of_random_searches)
-            st.markdown('D最適で選ばれた候補')
-            st.dataframe(D_selected_samples)
-            st.markdown('D_value: '+str(d_value))
+st.markdown('------------------------------------------------------------------------------------------------')
+
+#D最適計画
+data_for_d_opt = data5.drop(df_qualitative,axis=1)
+do_d_opt = st.checkbox('D最適計画',value=False)
+if do_d_opt:
+    number_of_selecting_samples = st.number_input('D最適基準で選択するサンプル数',1,50,10)
+    number_of_random_searches = st.number_input('ランダムの試行回数',10,100000,10000)
+    including_obtained_data = st.checkbox('実験済のデータを考慮するか',value=False)
+    if including_obtained_data==False:
+        st.markdown('実験データなしor0からD最適')
+        D_selected_samples, d_value = D_optimization(data_for_d_opt, x_obtained=None, number_of_samples=number_of_selecting_samples,number_of_random_searches = number_of_random_searches)
+        st.markdown('D最適で選ばれた候補')
+        st.dataframe(D_selected_samples)
+        st.markdown('D_value: '+str(d_value))
+    else:
+        st.markdown('実験データをアップロードしてください')
+        file_type = st.sidebar.radio('実験データファイル形式',('csv','xlsx'))
+        if file_type == 'csv':
+            w = st.sidebar.file_uploader("実験データアップロード", type = 'csv')
+        elif file_type == 'xlsx':
+            w = st.sidebar.file_uploader("実験データアップロード", type = 'xlsx')
         else:
-            st.markdown('実験データをアップロードしてください')
-            file_type = st.sidebar.radio('実験データファイル形式',('csv','xlsx'))
+            pass
+
+        if w:
             if file_type == 'csv':
-                w = st.sidebar.file_uploader("実験データアップロード", type = 'csv')
+                data_exp = pd.read_csv(w, index_col=0, encoding='utf-8')
             elif file_type == 'xlsx':
-                w = st.sidebar.file_uploader("実験データアップロード", type = 'xlsx')
-            else:
-                pass
+                data_exp_0 = pd.ExcelFile(w)
+                data_exp = data_exp_0.parse(data_exp_0.sheet_names[0], index_col=0,header=0, encoding='utf-8')
+                data_exp_0.close()
+        else:
+            data_exp_0 = pd.ExcelFile('data_example.xlsx')
+            data_exp = data_exp_0.parse(data_exp_0.sheet_names[0], index_col=0,header=0, encoding='utf-8')
+            data_exp_0.close()
+            st.markdown('確定の候補の例（サイドバーに任意のデータファイルをアップロード）')
 
-            if w:
-                if file_type == 'csv':
-                    data_exp = pd.read_csv(w, index_col=0, encoding='utf-8')
-                elif file_type == 'xlsx':
-                    data_exp_0 = pd.ExcelFile(w)
-                    data_exp = data_exp_0.parse(data_exp_0.sheet_names[0], index_col=0,header=0, encoding='utf-8')
-                    data_exp_0.close()
-                
-                if get_dummy:
-                    data_exp2 = pd.get_dummies(data_exp, columns=dummy_var)
-                else:
-                    data_exp2 = data_exp.copy()
-                    
-                st.dataframe(data_for_d_opt)
-                st.dataframe(data_exp2)
-                
-        
-                D_selected_samples, d_value = D_optimization(data_for_d_opt, x_obtained=data_exp2, number_of_samples=number_of_selecting_samples,number_of_random_searches = number_of_random_searches)
-                st.markdown('D最適で選ばれた候補')
-                st.dataframe(D_selected_samples)
-                st.markdown('D_value: '+str(d_value))
-            else:
-                pass
+        if get_dummy:
+            data_exp2 = pd.get_dummies(data_exp, columns=dummy_var)
+            st.dataframe(data_for_d_opt)
+        else:
+            data_exp2 = data_exp.copy()
+
+        st.dataframe(data_exp2)
+
+        D_selected_samples, d_value = D_optimization(data_for_d_opt, x_obtained=data_exp2, number_of_samples=number_of_selecting_samples,number_of_random_searches = number_of_random_searches)
 
 
-            st.markdown('------------------------------------------------------------------------------------------------')
-            #描画する説明変数
-            st.markdown('描画する説明変数')
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                X_variable = st.selectbox('説明変数1',data_for_d_opt.columns)
-            with col2:
-                Y_variable = st.selectbox('説明変数2',data_for_d_opt.columns,index=1)
-            with col3:
-                Z_variable = st.selectbox('説明変数3',data_for_d_opt.columns,index=2)
+    st.markdown('D最適で選ばれた候補')
+    st.dataframe(D_selected_samples)
+    st.markdown('D_value: '+str(d_value))
 
-            #2次元散布図
-            plt.rcParams['font.size'] = 6
-            fig, ax = plt.subplots(1,2,figsize=(4, 1.7))
-
-            if including_obtained_data:
-                if data_exp2:
-                    ax[0].scatter(data_exp2[X_variable],data_exp2[Y_variable],s=5, c='blue')
-            else:
-                pass
-            ax[0].scatter(D_selected_samples[X_variable],D_selected_samples[Y_variable],s=5, c='red')
-            ax[0].set_xlabel(X_variable,fontsize=6)
-            ax[0].set_ylabel(Y_variable,fontsize=6)
-
-            if including_obtained_data:
-                if data_exp2:
-                    ax[1].scatter(data_exp2[X_variable],data_exp2[Z_variable],s=5, c='blue')
-            else:
-                pass
-            ax[1].scatter(D_selected_samples[X_variable],D_selected_samples[Z_variable],s=5, c='red')
-            ax[1].set_xlabel(X_variable,fontsize=6)
-            ax[1].set_ylabel(Z_variable,fontsize=6)
-            plt.tight_layout()
-            st.pyplot(fig)
-
-            if including_obtained_data:
-                st.markdown('実験候補：赤, 実験データ: 青')
-                st.markdown('実験候補：赤')
-            else:
-                st.markdown('実験候補：赤')
+    #D最適で選ばれた候補の出力
+    csv_output_d = st.checkbox('D最適で選ばれた候補の出力',value=True, key='D')
+    if csv_output_d:
+        csv_name_d = st.text_input('ファイル名','D_selected_candidates_'+str(datetime.date.today())+'.csv')
+#         if st.button('Download'):
+#             data4.to_csv(csv_name,encoding='shift-jis')
+        csv_d = D_selected_samples.to_csv().encode('shift-jis')
+        st.download_button(label="Download",data=csv_d,file_name=csv_name_d, key='DD')
 
 
-        #
-        #
-        # #3次元散布図
-        # plt.rcParams['font.size'] = 8
-        # fig = plt.figure()
-        # ax = Axes3D(fig)
-        # # X,Y,Z軸にラベルを設定
-        # ax.set_xlabel(X_variable)
-        # ax.set_ylabel(Y_variable)
-        # ax.set_zlabel(Z_variable)
-        #
-        # ax.plot(df[X_variable],df[Y_variable],df[Z_variable],c='blue',marker="o",linestyle='None')  #実験データ
-        # ax.plot(D_selected_samples[X_variable],D_selected_samples[Y_variable],D_selected_samples[Z_variable],c='red',marker="o",linestyle='None') #実験候補
-        # st.pyplot(fig)
+
+    st.markdown('------------------------------------------------------------------------------------------------')
+    #描画する説明変数
+    st.markdown('描画する説明変数')
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        X_variable = st.selectbox('説明変数1',data_for_d_opt.columns)
+    with col2:
+        Y_variable = st.selectbox('説明変数2',data_for_d_opt.columns,index=1)
+    with col3:
+        Z_variable = st.selectbox('説明変数3',data_for_d_opt.columns,index=2)
+
+    #2次元散布図
+    plt.rcParams['font.size'] = 6
+    fig, ax = plt.subplots(1,2,figsize=(4, 1.7))
+
+    if including_obtained_data:
+        if w:
+            if data_exp2 is not None:
+                ax[0].scatter(data_exp2[X_variable],data_exp2[Y_variable],s=5, c='blue')
+    else:
+        pass
+    ax[0].scatter(D_selected_samples[X_variable],D_selected_samples[Y_variable],s=5, c='red')
+    ax[0].set_xlabel(X_variable,fontsize=6)
+    ax[0].set_ylabel(Y_variable,fontsize=6)
+
+    if including_obtained_data:
+        if data_exp2 is not None:
+            ax[1].scatter(data_exp2[X_variable],data_exp2[Z_variable],s=5, c='blue')
+    else:
+        pass
+    ax[1].scatter(D_selected_samples[X_variable],D_selected_samples[Z_variable],s=5, c='red')
+    ax[1].set_xlabel(X_variable,fontsize=6)
+    ax[1].set_ylabel(Z_variable,fontsize=6)
+    plt.tight_layout()
+    st.pyplot(fig)
+
+    if including_obtained_data:
+        st.markdown('実験候補：赤, 実験データ: 青')
+        st.markdown('実験候補：赤')
+    else:
+        st.markdown('実験候補：赤')
+
+
+
+
+    #3次元散布図
+    plt.rcParams['font.size'] = 8
+    fig = plt.figure()
+    ax = Axes3D(fig)
+    # X,Y,Z軸にラベルを設定
+    ax.set_xlabel(X_variable)
+    ax.set_ylabel(Y_variable)
+    ax.set_zlabel(Z_variable)
+
+    if including_obtained_data:
+        if data_exp2 is not None:
+            ax.plot(data_exp2[X_variable],data_exp2[Y_variable],data_exp2[Z_variable],c='blue',marker="o",linestyle='None')  #実験データ
+    ax.plot(D_selected_samples[X_variable],D_selected_samples[Y_variable],D_selected_samples[Z_variable],c='red',marker="o",linestyle='None') #実験候補
+    st.pyplot(fig)
