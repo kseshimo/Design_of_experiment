@@ -121,8 +121,6 @@ def D_optimization(x_generated, x_obtained=None, number_of_samples=10,number_of_
     remaining_indexes = list(set(all_indexes) - set(selected_sample_indexes))  # 選択されなかったサンプルのインデックス
     remaining_samples = x_generated.loc[remaining_indexes, :]  # 選択されなかったサンプル
 
-    st.markdown('相関行列の確認')
-    st.dataframe(selected_samples.corr()) # 相関行列の確認
     return selected_samples, best_d_optimal_value
 
 def generate_all_combination(df_setting_quantitative):
@@ -357,6 +355,9 @@ if do_d_opt:
     st.markdown('D最適で選ばれた候補')
     st.dataframe(D_selected_samples)
     st.markdown('D_value: '+str(d_value))
+
+    st.markdown('相関行列の確認')
+    st.dataframe(D_selected_samples.corr()) # 相関行列の確認
 
     #D最適で選ばれた候補の出力
     csv_output_d = st.checkbox('D最適で選ばれた候補の出力',value=True, key='D')
