@@ -311,7 +311,7 @@ data_for_d_opt = data5.drop(df_qualitative,axis=1)
 do_d_opt = st.checkbox('D最適計画',value=False)
 if do_d_opt:
     number_of_selecting_samples = st.number_input('D最適基準で選択するサンプル数',1,50,7)
-    number_of_random_searches = st.number_input('ランダムの試行回数',10,100000,5000)
+    number_of_random_searches = st.number_input('ランダムの試行回数',10,100000,10000)
     including_obtained_data = st.checkbox('実験済のデータを考慮するか',value=False)
     if including_obtained_data==False:
         st.markdown('実験データなしor0からD最適')
