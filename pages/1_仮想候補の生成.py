@@ -384,9 +384,8 @@ if do_d_opt:
     fig, ax = plt.subplots(1,2,figsize=(4, 1.7))
 
     if including_obtained_data:
-        if w:
-            if data_exp2 is not None:
-                ax[0].scatter(data_exp2[X_variable],data_exp2[Y_variable],s=5, c='blue')
+        if data_exp2 is not None:
+            ax[0].scatter(data_exp2[X_variable],data_exp2[Y_variable],s=5, c='blue')
     else:
         pass
     ax[0].scatter(D_selected_samples[X_variable],D_selected_samples[Y_variable],s=5, c='red')
