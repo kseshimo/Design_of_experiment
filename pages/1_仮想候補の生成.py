@@ -64,7 +64,7 @@ def generating_samples_2(setting_of_generation,number_of_generating_samples=1000
     return x_generated_final
 
 
-def D_optimization(x_generated, x_obtained=None, number_of_samples=10,number_of_random_searches = 10000):
+def D_optimization(x_generated, x_obtained=None, number_of_samples=10,number_of_random_searches = 10000, seed = 10):
     #一旦リセット
     selected_sample_indexes = None
     #number_of_random_searches = 1000 # ランダムにサンプルを選択して D 最適基準を計算する繰り返し回数
@@ -89,7 +89,7 @@ def D_optimization(x_generated, x_obtained=None, number_of_samples=10,number_of_
 
 
     # D 最適基準に基づくサンプル選択
-    np.random.seed(10) # 乱数を生成するためのシードを固定
+    np.random.seed(seed) # 乱数を生成するためのシードを固定
     for random_search_number in range(number_of_random_searches):
 
         # 1. ランダムに候補を選択
@@ -310,11 +310,16 @@ data_for_d_opt = data5.drop(df_qualitative,axis=1)
 do_d_opt = st.checkbox('D最適計画',value=False)
 if do_d_opt:
     number_of_selecting_samples = st.number_input('D最適基準で選択するサンプル数',1,50,7)
-    number_of_random_searches = st.number_input('ランダムの試行回数',10,100000,10000)
+    col1, col2 = st.columns(2)
+    with col1:
+        number_of_random_searches = st.number_input('ランダムの試行回数',10,100000,10000)
+    with col2:
+        random_seed = st.number_input('ランダムシード',0,100,10)
+
     including_obtained_data = st.checkbox('実験済のデータを考慮するか',value=False)
     if including_obtained_data==False:
         st.markdown('実験データなしor0からD最適')
-        D_selected_samples, d_value = D_optimization(data_for_d_opt, x_obtained=None, number_of_samples=number_of_selecting_samples,number_of_random_searches = number_of_random_searches)
+        D_selected_samples, d_value = D_optimization(data_for_d_opt, x_obtained=None, number_of_samples=number_of_selecting_samples,number_of_random_searches = number_of_random_searches,seed = random_seed)
         st.markdown('D最適で選ばれた候補')
         st.dataframe(D_selected_samples)
         st.markdown('D_value: '+str(d_value))
@@ -349,7 +354,7 @@ if do_d_opt:
 
         st.dataframe(data_exp2)
 
-        D_selected_samples, d_value = D_optimization(data_for_d_opt, x_obtained=data_exp2, number_of_samples=number_of_selecting_samples,number_of_random_searches = number_of_random_searches)
+        D_selected_samples, d_value = D_optimization(data_for_d_opt, x_obtained=data_exp2, number_of_samples=number_of_selecting_samples,number_of_random_searches = number_of_random_searches,seed = random_seed)
 
 
     st.markdown('D最適で選ばれた候補')
