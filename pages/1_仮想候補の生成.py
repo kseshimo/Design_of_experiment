@@ -326,6 +326,7 @@ if do_d_opt:
         st.markdown('D最適で選ばれた候補')
         st.dataframe(D_selected_samples)
         st.markdown('D_value: '+str(d_value))
+        corr = D_selected_samples.corr()
     else:
         st.markdown('実験データをアップロードしてください')
         file_type = st.sidebar.radio('実験データファイル形式',('csv','xlsx'))
@@ -359,6 +360,7 @@ if do_d_opt:
 
         D_selected_samples, d_value = D_optimization(data_for_d_opt, x_obtained=data_exp2, number_of_samples=number_of_selecting_samples,number_of_random_searches = number_of_random_searches,seed = random_seed)
 
+        corr = pd.concat([D_selected_samples,data_exp2.loc[:,D_selected_samples.columns]]).corr()
 
     D_selected_samples = D_selected_samples.sort_index()
     st.markdown('D最適で選ばれた候補')
@@ -366,7 +368,7 @@ if do_d_opt:
     st.markdown('D_value: '+str(d_value))
 
     st.markdown('相関行列の確認')
-    st.dataframe(D_selected_samples.corr()) # 相関行列の確認
+    st.dataframe(corr) # 相関行列の確認
 
     #D最適で選ばれた候補の出力
     csv_output_d = st.checkbox('D最適で選ばれた候補の出力',value=True, key='D')
