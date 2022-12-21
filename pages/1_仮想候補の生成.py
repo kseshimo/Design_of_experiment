@@ -387,19 +387,19 @@ if do_d_opt:
 
     if including_obtained_data:
         if data_exp2 is not None:
-            ax[0].scatter(data_exp2[X_variable],data_exp2[Y_variable],s=5, c='blue')
+            ax[0].scatter(data_exp2[X_variable],data_exp2[Y_variable],s=6, c='blue')
     else:
         pass
-    ax[0].scatter(D_selected_samples[X_variable],D_selected_samples[Y_variable],s=5, c='red')
+    ax[0].scatter(D_selected_samples[X_variable],D_selected_samples[Y_variable],s=4, c='red')
     ax[0].set_xlabel(X_variable,fontsize=6)
     ax[0].set_ylabel(Y_variable,fontsize=6)
 
     if including_obtained_data:
         if data_exp2 is not None:
-            ax[1].scatter(data_exp2[X_variable],data_exp2[Z_variable],s=5, c='blue')
+            ax[1].scatter(data_exp2[X_variable],data_exp2[Z_variable],s=6, c='blue')
     else:
         pass
-    ax[1].scatter(D_selected_samples[X_variable],D_selected_samples[Z_variable],s=5, c='red')
+    ax[1].scatter(D_selected_samples[X_variable],D_selected_samples[Z_variable],s=4, c='red')
     ax[1].set_xlabel(X_variable,fontsize=6)
     ax[1].set_ylabel(Z_variable,fontsize=6)
     plt.tight_layout()
