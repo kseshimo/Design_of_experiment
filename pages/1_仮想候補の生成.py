@@ -357,6 +357,7 @@ if do_d_opt:
         D_selected_samples, d_value = D_optimization(data_for_d_opt, x_obtained=data_exp2, number_of_samples=number_of_selecting_samples,number_of_random_searches = number_of_random_searches,seed = random_seed)
 
 
+    D_selected_samples = D_selected_samples.sort_index()
     st.markdown('D最適で選ばれた候補')
     st.dataframe(D_selected_samples)
     st.markdown('D_value: '+str(d_value))
