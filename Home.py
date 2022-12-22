@@ -15,6 +15,6 @@ st.markdown("###  Materials Infomatics Web app")  #🦙
 # st.write('回帰と予測')
 # st.write('ベイズ最適化')
 
-image = Image.open('Analysis_flow.png')
+#image = Image.open('Analysis_flow.png')
 
 st.image(image, caption='解析フロー',use_column_width=True)
