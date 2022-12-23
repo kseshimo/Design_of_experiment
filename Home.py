@@ -17,4 +17,4 @@ st.markdown("###  Materials Infomatics Web app")  #🦙
 
 #image = Image.open('Analysis_flow.png')
 
-st.image(image, caption='解析フロー',use_column_width=True)
+#st.image(image, caption='解析フロー',use_column_width=True)
